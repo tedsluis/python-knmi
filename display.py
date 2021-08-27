@@ -3,6 +3,10 @@
 
 import netCDF4
 import numpy as np
+import re
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+
 
 f = netCDF4.Dataset('./KMDS__OPER_P___10M_OBS_L2_202107160000.nc')
 print ('DATASET:', f)
@@ -18,12 +22,23 @@ print ('DATASET:', f)
 #     references: http://data.knmi.nl
 #     comment: Please note: no data has been found for the following variables: ts1, ts2
 #     dimensions(sizes): station(52), time(1)
-#     variables(dimensions): <class 'str'> station(station), float64 time(time), <class 'str'> stationname(station), float64 lat(station), float64 lon(station), float64 height(station), float64 dd(station, time), float64 ff(station, time), float64 gff(station, time), float64 ta(station, time), float64 rh(station, time), float64 pp(station, time), float64 zm(station, time), float64 D1H(station, time), float64 dr(station, time), float64 hc(station, time), float64 hc1(station, time), float64 hc2(station, time), float64 hc3(station, time), float64 nc(station, time), float64 nc1(station, time), float64 nc2(station, time), float64 nc3(station, time), float64 pg(station, time), float64 pr(station, time), float64 qg(station, time), float64 R12H(station, time), float64 R1H(station, time), float64 R24H(station, time), float64 R6H(station, time), float64 rg(station, time), float64 ss(station, time), float64 td(station, time), float64 tgn(station, time), float64 Tgn12(station, time), float64 Tgn14(station, time), float64 Tgn6(station, time), float64 tn(station, time), float64 Tn12(station, time), float64 Tn14(station, time), float64 Tn6(station, time), float64 tx(station, time), float64 Tx12(station, time), float64 Tx24(station, time), float64 Tx6(station, time), float64 ww(station, time), float64 pwc(station, time), float64 ww-10(station, time), float64 ts1(station, time), float64 ts2(station, time), |S1 iso_dataset(), |S1 product(), |S1 projection()
+#     variables(dimensions): <class 'str'> station(station), float64 time(time), <class 'str'> stationname(station), float64 lat(station), float64 lon(station), 
+# float64 height(station), float64 dd(station, time), float64 ff(station, time), float64 gff(station, time), float64 ta(station, time), float64 rh(station, time), 
+# float64 pp(station, time), float64 zm(station, time), float64 D1H(station, time), float64 dr(station, time), float64 hc(station, time), float64 hc1(station, time), 
+# float64 hc2(station, time), float64 hc3(station, time), float64 nc(station, time), float64 nc1(station, time), float64 nc2(station, time), float64 nc3(station, time), 
+# float64 pg(station, time), float64 pr(station, time), float64 qg(station, time), float64 R12H(station, time), float64 R1H(station, time), float64 R24H(station, time), 
+# float64 R6H(station, time), float64 rg(station, time), float64 ss(station, time), float64 td(station, time), float64 tgn(station, time), float64 Tgn12(station, time), 
+# float64 Tgn14(station, time), float64 Tgn6(station, time), float64 tn(station, time), float64 Tn12(station, time), float64 Tn14(station, time), float64 Tn6(station, time), 
+# float64 tx(station, time), float64 Tx12(station, time), float64 Tx24(station, time), float64 Tx6(station, time), float64 ww(station, time), float64 pwc(station, time), 
+# float64 ww-10(station, time), float64 ts1(station, time), float64 ts2(station, time), |S1 iso_dataset(), |S1 product(), |S1 projection()
 #     groups: 
 
 print('KEYS:', f.variables.keys()) 
 
-# dict_keys(['station', 'time', 'stationname', 'lat', 'lon', 'height', 'dd', 'ff', 'gff', 'ta', 'rh', 'pp', 'zm', 'D1H', 'dr', 'hc', 'hc1', 'hc2', 'hc3', 'nc', 'nc1', 'nc2', 'nc3', 'pg', 'pr', 'qg', 'R12H', 'R1H', 'R24H', 'R6H', 'rg', 'ss', 'td', 'tgn', 'Tgn12', 'Tgn14', 'Tgn6', 'tn', 'Tn12', 'Tn14', 'Tn6', 'tx', 'Tx12', 'Tx24', 'Tx6', 'ww', 'pwc', 'ww-10', 'ts1', 'ts2', 'iso_dataset', 'product', 'projection'])
+# dict_keys(['station', 'time', 'stationname', 'lat', 'lon', 'height', 'dd', 'ff', 'gff', 'ta', 'rh', 'pp', 'zm', 
+# 'D1H', 'dr', 'hc', 'hc1', 'hc2', 'hc3', 'nc', 'nc1', 'nc2', 'nc3', 'pg', 'pr', 'qg', 'R12H', 'R1H', 'R24H', 'R6H',
+# 'rg', 'ss', 'td', 'tgn', 'Tgn12', 'Tgn14', 'Tgn6', 'tn', 'Tn12', 'Tn14', 'Tn6', 'tx', 'Tx12', 'Tx24', 'Tx6', 'ww', 
+# 'pwc', 'ww-10', 'ts1', 'ts2', 'iso_dataset', 'product', 'projection'])
 
 station_class = f.variables['station'] # station variable
 print('STATION:', station_class)
@@ -151,23 +166,183 @@ print('SLIDE STATIONNAME',slice)
 # SLIDE STATIONNAME ['D15-FA-1' 'P11-B' 'K14-FA-1C' 'A12-CPP' 'L9-FF-1' 'AWG-1' 'J6-A'
 #  'HOORN-A' 'BUITENGAATS/BG-OHVS2' 'F3-FB-1' 'DEELEN'
 
-# extract lat/lon values (in degrees) to numpy arrays
-latvals = lat[:] 
-lonvals = lon[:]
+_variables = f.variables.keys()
+for _var in _variables:
+  lijst=f.variables[_var][:]
+  print('var',_var)
+  if not re.match('(iso_dataset|product|projection)', _var):
+    _lijst=" ".join(str(i) for i in lijst)
+    print('\n|----',_var,'---->',f.variables[_var],'\n   >---->',_lijst,'>---|')
 
-# a function to find the index of the point closest pt
-# (in squared distance) to give lat/lon value.
-def getclosest_ij(lats,lons,latpt,lonpt):
-  print('lats.shape',lats.shape)
-  # find squared distance of every point on grid
-  dist_sq = (lats-latpt)**2 + (lons-lonpt)**2
-  print('dist_sq:',dist_sq)
-  # 1D index of minimum dist_sq element
-  minindex_flattened = dist_sq.argmin()
-  print('dist_sq.argmin:',minindex_flattened)
-  # Get 2D index for latvals and lonvals arrays from 1D index
-  return np.unravel_index(minindex_flattened, lats.shape)
+station_class = f.variables['station']
+station = station_class[:]
+print('STATION:',station)
 
-iy_min, ix_min = getclosest_ij(latvals, lonvals, 52, 5)
-print(iy_min)
-print(ix_min)
+tn = f.variables['tn'][:]
+dd = f.variables['dd'][:]
+ff = f.variables['ff'][:]
+lon = f.variables['lon'][:]
+lat = f.variables['lat'][:]
+
+print('TN:', slice)
+
+for _station in f.variables['station'][:]:
+  _stationname = stationname[station == _station][0]
+  _tn = tn[station == _station][0][0]
+  _height = height[station == _station][0]
+  _dd = dd[station == _station][0][0]
+  _ff = ff[station == _station][0][0]
+  _lon = lon[station == _station][0]
+  _lat = lat[station == _station][0]
+  print(_stationname, _tn, _height, _dd, _ff, _lon, _lat)
+
+_long_names={'key': 'value'}
+_units={'key': 'value'}
+for _variable in _variables:
+   if not re.match('(iso_dataset|product|projection|time|ts1|ts2)', _variable):
+    _class = f.variables[_variable] # station variable
+    _string=str(_class)
+    _string=_string.replace('\n','#')
+    _long_name = re.search('.*long_name:\s([^#]+)#.*', _string)
+    if _long_name:
+      _long_name=_long_name.group(1)
+    else:
+      _long_name="-"
+    _unit = re.search('.*units:\s([^#]+)#.*', _string)
+    if _unit:
+      _unit=_unit.group(1)
+    else:
+      _unit="-"
+    _long_names[_variable]=_long_name
+    _units[_variable]=_unit
+    print('long_name:',_long_name,'units:',_unit)
+
+def mapping_data(_variable):
+    _lon, _lat, _value = [], [], []
+    for _station in f.variables['station'][:]:
+      _values=f.variables[_variable][:]
+      if re.match('(lat|lon|height|stationname|station|iso_dataset|product|projection|time)', _variable):
+        _v=_values[station == _station][0]
+      else:
+        _v=_values[station == _station][0][0]
+      _value.append(_v)
+      _lon.append(lon[station == _station][0])
+      _lat.append(lat[station == _station][0])
+      print(_lon, _lat, _value)
+    return _lon, _lat, _value
+
+def createmap(_variable):
+
+    fig, ax = plt.subplots()
+    _lon, _lat, _value = mapping_data(_variable)
+    ax.scatter(_lon, _lat, edgecolors='red', linewidths=0.1, zorder=2)
+    for i in range(len(_lon)):
+        #ax.annotate(_stationname[i], xy=(_lon[i],_lat[i]+0.05))
+    # for i in range(len(_stationname)):
+        ax.annotate(_value[i], xy=(_lon[i],_lat[i]),fontsize=4)
+        # ax.annotate(_dd[i], xy=(_lon[i],_lat[i]), xytext=(_lon[i]+0.2,_lat[i]+0.1),arrowprops=dict(facecolor='black', shrink=0.1),)
+    # for i in range(len(atlas_data)):
+    #     ax.annotate(atlas_data[i][0], xy=(atlas_data[i][2],atlas_data[i][1]), xytext=(atlas_data[i][2],atlas_data[i][1]+0.1),arrowprops=dict(facecolor='black', shrink=0.01),)
+
+    #ax.imshow(mpimg.imread('https://i.ibb.co/8xKy10y/Kaart-Nederland-grijs.png'), extent=(  3.2674058600277225, 7.222483905734761, 50.74706431634171, 53.54700518476279), aspect=1.5, zorder=1)
+    ax.imshow(mpimg.imread('https://i.ibb.co/DRjX37N/Kaart-Nederland-grijs.png'), extent=(  3.2674058600277225, 7.222483905734761, 50.74706431634171, 53.54700518476279), aspect=1.5, zorder=1)
+    _filename=_variable+'.png'
+    #fig.savefig(_filename, dpi=fig.dpi)
+    _title=_long_names[_variable]+' ('+_variable+')\n'+_units[_variable]
+    ax.text(3.3,53.5, _title,fontsize=5, ha="left", va='top', color='.5')
+    fig.savefig(_filename, dpi=400, bbox_inches = 'tight')
+    #plt.show()
+
+# for _variable in _variables:
+#    if not re.match('(iso_dataset|product|projection|time|ts1|ts2)', _variable):
+#      print('_variable',_variable)
+#      createmap(_variable)
+
+_css='''<style>
+/* DivTable.com */
+.divTable{
+	display: table;
+	width: 100%;
+}
+.divTableRow {
+	display: table-row;
+}
+.rotate {
+  background-color: yellow;
+  transform: rotate(90deg);
+  transform-origin: right, top;
+  -webkit-transform: rotate(90deg); /* Safari/Chrome */
+  -webkit-transform-origin:right, top;
+  -moz-transform: rotate(90deg);    /* Firefox */
+  -ms-transform: rotate(90deg);
+  -ms-transform-origin:right, top;
+}
+.divTableHeadingCell {
+	border: 1px solid #999999;
+	display: table-cell;
+	padding: 3px 10px;
+
+}
+.divTableCell {
+	border: 1px solid #999999;
+	display: table-cell;
+	padding: 3px 10px;
+}
+.divTableHeading {
+	background-color: #EEE;
+	display: table-header-group;
+	font-weight: bold;
+}
+.divTableBody {
+	display: table-row-group;
+}
+</style>'''
+
+with open('index.html', 'w') as p:
+
+  print('<html>',file=p)
+  print('<head>',file=p)
+  print(_css, file=p)
+  print('</head>',file=p)
+  print('<body>',file=p)
+  print('<div class="divTable">', file=p)
+
+  print('<div class="divTableHeading">', file=p)
+  print('<div class="divTableRow">', file=p)
+  for _var in _variables:
+    if not re.match('(iso_dataset|product|projection|time|ts1|ts2)', _var):
+      _head=_long_names[_var]+' ('+_var+') '+_units[_var]
+      print('<div class="divTableHeadingCell"><h5 class="rotate">',_head,'</h1></div>', file=p)
+  print('</div>', file=p)
+  print('</div>', file=p)
+
+  print('<div class="divTableBody">', file=p)
+  for _station in f.variables['station'][:]:
+    _stationname = stationname[station == _station][0]
+    print('<div class="divTableRow">', file=p)
+    for _var in _variables:
+      if not re.match('(iso_dataset|product|projection|time|ts1|ts2)', _var):
+        _values=f.variables[_var][:]
+        if re.match('(lat|lon|height|stationname|station)', _var):
+          _value=_values[station == _station][0]
+        else:
+          _value=_values[station == _station][0][0]
+        _title=_stationname+':'+_var+' ('+_long_names[_var]+') :'+ str(_value)+' '+ _units[_var]
+        print('<div class="divTableCell" title="',_title,'">',_value,'</div>', file=p)
+    print('</div>', file=p)
+  print('</div>', file=p)
+  print('</div>', file=p)
+  print('</div>', file=p)
+
+  print('<div class="divTable">', file=p)
+  print('<div class="divTableRow">', file=p)
+  for _variable in _variables:
+    if not re.match('(iso_dataset|product|projection|time|ts1|ts2)', _variable):
+      _filename=_variable+'.png'
+      print('<div class="divTableRow"> <img src="'+_filename+'" alt=""> </div>', file=p)
+  print('</div>', file=p)
+  print('</div>', file=p)
+
+  print('</body>',file=p)
+  print('</html>',file=p)
+
