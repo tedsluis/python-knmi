@@ -6,9 +6,75 @@ import numpy as np
 import re
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+import requests
+import logging
+
+logging.basicConfig()
+logger = logging.getLogger(__name__)
+logger.setLevel("INFO")
+
+api_url = "https://api.dataplatform.knmi.nl/open-data"
+api_version = "v1"
 
 
-f = netCDF4.Dataset('./KMDS__OPER_P___10M_OBS_L2_202107160000.nc')
+def get_data():
+    # Parameters
+    api_key = "eyJvcmciOiI1ZTU1NGUxOTI3NGE5NjAwMDEyYTNlYjEiLCJpZCI6ImNjOWE2YjM3ZjVhODQwMDZiMWIzZGIzZDRjYzVjODFiIiwiaCI6Im11cm11cjEyOCJ9"
+    dataset_name = "Actuele10mindataKNMIstations"
+    dataset_version = "2"
+
+    # Use get file to retrieve a file from one hour ago.
+    # Filename format for this dataset equals KMDS__OPER_P___10M_OBS_L2_YYYYMMDDHHMM.nc,
+    # where the minutes are increased in steps of 10.
+    timestamp_now = datetime.utcnow()
+    timestamp_one_hour_ago = (
+        timestamp_now
+        - timedelta(hours=1)
+        - timedelta(minutes=timestamp_now.minute % 10)
+    )
+    filename = (
+        f"KMDS__OPER_P___10M_OBS_L2_{timestamp_one_hour_ago.strftime('%Y%m%d%H%M')}.nc"
+    )
+
+    logger.info(f"Current time: {timestamp_now}")
+    logger.info(f"One hour ago: {timestamp_one_hour_ago}")
+    logger.info(f"Dataset file to download: {filename}")
+
+    endpoint = f"{api_url}/{api_version}/datasets/{dataset_name}/versions/{dataset_version}/files/{filename}/url"
+    get_file_response = requests.get(endpoint, headers={"Authorization": api_key})
+
+    if get_file_response.status_code != 200:
+        logger.error("Unable to retrieve download url for file")
+        logger.error(get_file_response.text)
+        sys.exit(1)
+
+    logger.info(
+        f"Successfully retrieved temporary download URL for dataset file {filename}"
+    )
+
+    download_url = get_file_response.json().get("temporaryDownloadUrl")
+    dataset_file_response = requests.get(download_url)
+
+    # Write dataset file to disk
+    p = Path(filename)
+    p.write_bytes(dataset_file_response.content)
+
+    logger.info(f"Successfully downloaded dataset file to {p}")
+
+    # Check logging for deprecation
+    if "X-KNMI-Deprecation" in get_file_response.headers:
+        deprecation_message = get_file_response.headers.get("X-KNMI-Deprecation")
+        logger.warning(f"Deprecation message: {deprecation_message}")
+
+    return filename
+
+_dataset_filename=get_data()
+
+
+f = netCDF4.Dataset(_dataset_filename)
 print ('DATASET:', f)
 
 # <class 'netCDF4._netCDF4.Dataset'>
@@ -62,6 +128,18 @@ print('TIME:', time_class)
 # unlimited dimensions: 
 # current shape = (1,)
 # filling on, default _FillValue of 9.969209968386869e+36 used
+
+time = time_class[:]
+# dtime = netCDF4.num2date(time_var[:],time_var.units)
+print('time:',time)
+print('netCDF4.num2date:',netCDF4.num2date(time_class[:],time_class.units))
+#_dtime = netCDF4.num2date(time_class[:],time_class.units)
+_datetime = netCDF4.num2date(time_class[0],time_class.units).strftime('%Y-%b-%d %H:%M')
+print('num2date -> strftime:',_datetime)
+
+# time: [2.2575456e+09]
+# netCDF4.num2date: [cftime.DatetimeGregorian(2021, 7, 16, 0, 0, 0, 0, has_year_zero=False)]
+# num2date -> strftime: 2021-Jul-16 00:00
 
 lat_class,lon_class = f.variables['lat'], f.variables['lon']
 print('LAT:',lat_class)
@@ -194,12 +272,17 @@ for _station in f.variables['station'][:]:
   _ff = ff[station == _station][0][0]
   _lon = lon[station == _station][0]
   _lat = lat[station == _station][0]
-  print(_stationname, _tn, _height, _dd, _ff, _lon, _lat)
+  print('stationname:', _stationname, 'tn:',_tn, 'height:',_height, 'dd:',_dd, 'ff:',_ff,'lon:',_lon, 'lat:',_lat)
 
 _long_names={'key': 'value'}
 _units={'key': 'value'}
+_index_key={}
+_key=0
 for _variable in _variables:
-   if not re.match('(iso_dataset|product|projection|time|ts1|ts2)', _variable):
+  _index_key[_variable]=_key
+  print('->>>>>>>>>>>>>>>',_variable, _key)
+  _key+=1  
+  if not re.match('(iso_dataset|product|projection|ts1|ts2)', _variable):
     _class = f.variables[_variable] # station variable
     _string=str(_class)
     _string=_string.replace('\n','#')
@@ -207,45 +290,62 @@ for _variable in _variables:
     if _long_name:
       _long_name=_long_name.group(1)
     else:
-      _long_name="-"
+      _long_name=""
     _unit = re.search('.*units:\s([^#]+)#.*', _string)
     if _unit:
       _unit=_unit.group(1)
     else:
-      _unit="-"
+      _unit=""
     _long_names[_variable]=_long_name
     _units[_variable]=_unit
     print('long_name:',_long_name,'units:',_unit)
 
+_cat={}
+_cat['station info']=['station','time','lat','lon','height']
+_cat['basics']=['ta','rh','pp','zm']
+_cat['wind']=['dd','ff','gff']
+_cat['wolken']=['hc','hc1','hc2','hc3','nc','nc1','nc2','nc3']
+_cat['neerslag']=['D1H','dr','pg','pr','R12H','R1H','R24H','R6H','rg']
+_cat['zon']=['qg','ss']
+_cat['temperatuur']=['td','tgn','Tgn12','Tgn14','Tgn6','tn','Tn12','Tn14','Tn6','tx','Tx12','Tx24','Tx6']
+_cat['weer code']=['ww','pwc','ww-10']
+
 def mapping_data(_variable):
-    _lon, _lat, _value = [], [], []
+    _lon, _lat, _value, _stationname = [], [], [], []
     for _station in f.variables['station'][:]:
       _values=f.variables[_variable][:]
-      if re.match('(lat|lon|height|stationname|station|iso_dataset|product|projection|time)', _variable):
+      if re.match('(lat|lon|height|stationname|station|iso_dataset|product|projection)', _variable):
         _v=_values[station == _station][0]
+      elif re.match('(time)', _variable):
+        _v=_datetime
       else:
         _v=_values[station == _station][0][0]
       _value.append(_v)
+      _sn=stationname[station == _station][0]
+      for _afkorting in [' AWS',' VK',' AP',' WP']:
+        _sn=_sn.replace(_afkorting,'')
+      _stationname.append(_sn)
       _lon.append(lon[station == _station][0])
       _lat.append(lat[station == _station][0])
       print(_lon, _lat, _value)
-    return _lon, _lat, _value
+    return _lon, _lat, _value, _stationname
 
 def createmap(_variable):
 
     fig, ax = plt.subplots()
-    _lon, _lat, _value = mapping_data(_variable)
-    ax.scatter(_lon, _lat, edgecolors='red', linewidths=0.1, zorder=2)
+    _lon, _lat, _value, _stationname = mapping_data(_variable)
+    # https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.scatter.html
+    ax.scatter(_lon, _lat, s=1, edgecolors='red', linewidths=0.3, zorder=2)
     for i in range(len(_lon)):
         #ax.annotate(_stationname[i], xy=(_lon[i],_lat[i]+0.05))
     # for i in range(len(_stationname)):
-        ax.annotate(_value[i], xy=(_lon[i],_lat[i]),fontsize=4)
+        ax.annotate(str(_value[i])+'\n'+_stationname[i], xy=(_lon[i],_lat[i]),fontsize=2)
         # ax.annotate(_dd[i], xy=(_lon[i],_lat[i]), xytext=(_lon[i]+0.2,_lat[i]+0.1),arrowprops=dict(facecolor='black', shrink=0.1),)
     # for i in range(len(atlas_data)):
     #     ax.annotate(atlas_data[i][0], xy=(atlas_data[i][2],atlas_data[i][1]), xytext=(atlas_data[i][2],atlas_data[i][1]+0.1),arrowprops=dict(facecolor='black', shrink=0.01),)
 
     #ax.imshow(mpimg.imread('https://i.ibb.co/8xKy10y/Kaart-Nederland-grijs.png'), extent=(  3.2674058600277225, 7.222483905734761, 50.74706431634171, 53.54700518476279), aspect=1.5, zorder=1)
-    ax.imshow(mpimg.imread('https://i.ibb.co/DRjX37N/Kaart-Nederland-grijs.png'), extent=(  3.2674058600277225, 7.222483905734761, 50.74706431634171, 53.54700518476279), aspect=1.5, zorder=1)
+    ax.imshow(mpimg.imread('https://i.ibb.co/K7bTd8p/Kaart-Nederland-groen.png'), extent=(  3.2674058600277225, 7.222483905734761, 50.74706431634171, 53.54700518476279), aspect=1.5, zorder=1)
     _filename=_variable+'.png'
     #fig.savefig(_filename, dpi=fig.dpi)
     _title=_long_names[_variable]+' ('+_variable+')\n'+_units[_variable]
@@ -253,96 +353,167 @@ def createmap(_variable):
     fig.savefig(_filename, dpi=400, bbox_inches = 'tight')
     #plt.show()
 
-# for _variable in _variables:
-#    if not re.match('(iso_dataset|product|projection|time|ts1|ts2)', _variable):
-#      print('_variable',_variable)
-#      createmap(_variable)
+for _variable in _variables:
+   if not re.match('(iso_dataset|product|projection|time|ts1|ts2)', _variable):
+     print('_variable',_variable)
+     createmap(_variable)
 
-_css='''<style>
-/* DivTable.com */
-.divTable{
-	display: table;
-	width: 100%;
-}
-.divTableRow {
-	display: table-row;
-}
-.rotate {
-  background-color: yellow;
-  transform: rotate(90deg);
-  transform-origin: right, top;
-  -webkit-transform: rotate(90deg); /* Safari/Chrome */
-  -webkit-transform-origin:right, top;
-  -moz-transform: rotate(90deg);    /* Firefox */
-  -ms-transform: rotate(90deg);
-  -ms-transform-origin:right, top;
-}
-.divTableHeadingCell {
-	border: 1px solid #999999;
-	display: table-cell;
-	padding: 3px 10px;
+# _css='''    <style>
+# .verticalTableHeader {
+#   writing-mode: vertical-lr;
 
-}
-.divTableCell {
-	border: 1px solid #999999;
-	display: table-cell;
-	padding: 3px 10px;
-}
-.divTableHeading {
-	background-color: #EEE;
-	display: table-header-group;
-	font-weight: bold;
-}
-.divTableBody {
-	display: table-row-group;
-}
-</style>'''
+#   white-space: nowrap;
+#   -webkit-writing-mode: vertical-lr;
+#   -ms-writing-mode: vertical-lr;
+#   height="300px";  
+# }
+# .mono {
+#   font-family:monospace;
+# }
+#     </style>'''
 
 with open('index.html', 'w') as p:
 
-  print('<html>',file=p)
-  print('<head>',file=p)
-  print(_css, file=p)
-  print('</head>',file=p)
-  print('<body>',file=p)
-  print('<div class="divTable">', file=p)
+  print('''
+<html>
+  <head>
+    <style>
+.verticalTableHeader {
+  writing-mode: vertical-lr;
 
-  print('<div class="divTableHeading">', file=p)
-  print('<div class="divTableRow">', file=p)
+  white-space: nowrap;
+  -webkit-writing-mode: vertical-lr;
+  -ms-writing-mode: vertical-lr;
+  height="300px";  
+}
+.mono {
+  font-family:monospace;
+}
+    </style>
+  </head>
+  <body>''', file=p)
+  # Knoppen alles of niets
+  _show_button=''
+  _hide_button=''
+  _all_vars=[]
+  for _category, _vars in _cat.items():
+    _all_vars+=_vars
+    for _var in _vars:
+      _show_button+='''tf.extension('colsVisibility').showCol('''+str(_index_key[_var])+'''); '''
+      _hide_button+='''tf.extension('colsVisibility').hideCol('''+str(_index_key[_var])+'''); '''
+  _title=', '.join(_all_vars)+' (columns: '+", ".join(str(_index_key[i]) for i in _all_vars)+')'
+  _show_button+='''">+ alles</button>'''
+  _hide_button+='''">- niets</button>'''
+  print('''<button class="mono" title="'''+'show: '+_title+'''" onclick="javascript: '''+_show_button, file=p)
+  print('''<button class="mono" title="'''+'hide: '+_title+'''" onclick="javascript: '''+_hide_button, file=p)
+  print('</br>', file=p)
+  # categorieen
+  for _category, _vars in _cat.items():
+    _show_button=''
+    _hide_button=''
+    for _var in _vars:
+      print('_category',_category,'_variable',_var)
+      print('index_key',_index_key[_var])
+      _show_button+='''tf.extension('colsVisibility').showCol('''+str(_index_key[_var])+'''); '''
+      _hide_button+='''tf.extension('colsVisibility').hideCol('''+str(_index_key[_var])+'''); '''
+    # show en hide knoppen  
+    _title=', '.join(_vars)+' (columns: '+", ".join(str(_index_key[i]) for i in _vars)+')'
+    _show_button+='''">+ '''+_category+'''</button>'''
+    _hide_button+='''">- '''+_category+'''</button> >===> '''
+    print('''<button class="mono" title="'''+'show: '+_title+'''" onclick="javascript: '''+_show_button, file=p)
+    print('''<button class="mono" title="'''+'hide: '+_title+'''" onclick="javascript: '''+_hide_button, file=p)
+    # toggle knoppen
+    for _var in _vars:
+      if not re.match('(iso_dataset|product|projection|ts1|ts2)', _var):
+        _title='toggle:'+_long_names[_var]+' ('+_units[_var]+') (column: '+str(_index_key[_var])+')'
+        print('''<button title="''',_title,'''" onclick="javascript: tf.extension('colsVisibility').toggleCol(''',_index_key[_var],''');">''',_var,'''</button>''', file=p)      
+    print('</br>', file=p)
+  # tabel
+  print('    <table border="1" id="knmi">', file=p)
+  print('      <tr>', file=p)
+  # verticale kolom headers
   for _var in _variables:
-    if not re.match('(iso_dataset|product|projection|time|ts1|ts2)', _var):
-      _head=_long_names[_var]+' ('+_var+') '+_units[_var]
-      print('<div class="divTableHeadingCell"><h5 class="rotate">',_head,'</h1></div>', file=p)
-  print('</div>', file=p)
-  print('</div>', file=p)
+    if not re.match('(iso_dataset|product|projection|ts1|ts2)', _var):
+      _header=_long_names[_var]
+      _unit=""
+      if _units[_var] != "":
+        _unit=' ('+_units[_var]+')'
+        _header+=_unit
+      print('        <th class="verticalTableHeader" title="'+_var+' '+_unit+' (column:'+str(_index_key[_var])+')">',_header,'</th>', file=p)
+  print('      </tr>', file=p)
+  # horizontale kolom headers
+  print('      <tr>', file=p)
+  for _var in _variables:
+    if not re.match('(iso_dataset|product|projection|ts1|ts2)', _var):
+      _unit=""
+      if _units[_var] != "":
+        _unit+=' ('+_units[_var]+')'
+      print('        <th title="'+_long_names[_var]+_unit+' (column:'+str(_index_key[_var])+')">',_var,'</th>', file=p)
+  print('      </tr>', file=p)
 
-  print('<div class="divTableBody">', file=p)
   for _station in f.variables['station'][:]:
     _stationname = stationname[station == _station][0]
-    print('<div class="divTableRow">', file=p)
+    print('      <tr>', file=p)
+    # tabel waarden
     for _var in _variables:
-      if not re.match('(iso_dataset|product|projection|time|ts1|ts2)', _var):
+      if not re.match('(iso_dataset|product|projection|ts1|ts2)', _var):
         _values=f.variables[_var][:]
         if re.match('(lat|lon|height|stationname|station)', _var):
-          _value=_values[station == _station][0]
+          _value=str(_values[station == _station][0])
+        elif re.match('(time)', _var):
+          _value=_datetime
         else:
-          _value=_values[station == _station][0][0]
-        _title=_stationname+':'+_var+' ('+_long_names[_var]+') :'+ str(_value)+' '+ _units[_var]
-        print('<div class="divTableCell" title="',_title,'">',_value,'</div>', file=p)
-    print('</div>', file=p)
-  print('</div>', file=p)
-  print('</div>', file=p)
-  print('</div>', file=p)
+          _value=str(_values[station == _station][0][0])
+        _title=_stationname+':'+_var+' ('+_long_names[_var]+') :'+ _value+' '+ _units[_var]
+        print('''        <td title="'''+_title+'''"><a href="'''+_var+'''.html">'''+_value+'''</a></td>''', file=p)
+    print('      </tr>', file=p)
+  print('    </table>', file=p)
 
-  print('<div class="divTable">', file=p)
-  print('<div class="divTableRow">', file=p)
-  for _variable in _variables:
-    if not re.match('(iso_dataset|product|projection|time|ts1|ts2)', _variable):
-      _filename=_variable+'.png'
-      print('<div class="divTableRow"> <img src="'+_filename+'" alt=""> </div>', file=p)
-  print('</div>', file=p)
-  print('</div>', file=p)
+  print('''
+<script src="tablefilter/tablefilter.js"></script>
 
-  print('</body>',file=p)
-  print('</html>',file=p)
+<script data-config>
+var tfConfig = {
+    base_path: 'tablefilter/',
+    filters_row_index: 0,
+    rows_counter: {
+                text: 'Items: '
+    },
+    btn_reset: true,
+    status_bar: true,
+    extensions: [{
+              name: 'colsVisibility',
+              at_start: [0,1,3,4,5],
+              text: 'Columns: ',
+              public_toolbar_position: 'left',
+              enable_tick_all: true
+          }, {
+              name: 'sort'
+        }]
+};
+var tf = new TableFilter('knmi', tfConfig);
+tf.init();
+</script>
+</body>
+</html>''',file=p)
+p.close()
 
+for _variable in _variables:
+  if not re.match('(iso_dataset|product|projection|ts1|ts2)', _variable):
+    _image_name=_variable+'.png'
+    _page_name=_variable+'.html'
+    print('_image_name:',_image_name,'_page_name:',_page_name)
+    with open(_page_name, 'w') as p:
+      print('''
+<html>
+  <head>
+    <style>
+.mono {
+  font-family:monospace;
+}
+    </style>
+  </head>
+  <body>
+    <img src="'''+_image_name+'''" alt="">
+  </body>''', file=p)
+    p.close()
