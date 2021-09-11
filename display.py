@@ -1,6 +1,7 @@
 
 # https://www.earthinversion.com/utilities/reading-NetCDF4-data-in-python/
 
+from matplotlib.text import OffsetFrom
 import netCDF4
 import numpy as np
 import re
@@ -348,8 +349,9 @@ def createmap(_variable):
     ax.imshow(mpimg.imread('https://i.ibb.co/K7bTd8p/Kaart-Nederland-groen.png'), extent=(  3.2674058600277225, 7.222483905734761, 50.74706431634171, 53.54700518476279), aspect=1.5, zorder=1)
     _filename=_variable+'.png'
     #fig.savefig(_filename, dpi=fig.dpi)
-    _title=_long_names[_variable]+' ('+_variable+')\n'+_units[_variable]
+    _title=_long_names[_variable]+' ('+_variable+')\n'+_datetime+'\n'+_units[_variable]
     ax.text(3.3,53.5, _title,fontsize=5, ha="left", va='top', color='.5')
+    ax.axis('off')
     fig.savefig(_filename, dpi=400, bbox_inches = 'tight')
     #plt.show()
 
